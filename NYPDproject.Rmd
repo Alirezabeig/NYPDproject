@@ -1,0 +1,205 @@
+---
+title: "NYPD project"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+date: "2022-09-06"
+author: "Student"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+Project week3 - Class: Data Science as a field
+
+## Instal the packages below:
+```{r warning=TRUE, message=TRUE}
+library(tidyverse) 
+library(lubridate)  
+library(tidytext)  
+library(magrittr)
+library(dplyr) 
+library(knitr)
+knitr::opts_chunk$set(cache = TRUE, warning = FALSE, 
+                      message = FALSE, cache.lazy = FALSE)
+```
+
+
+### Read The Data:
+```{r cache = TRUE}
+url_in <- "https://data.cityofnewyork.us/api/views/qgea-i56i/rows.csv?accessType=DOWNLOAD"
+NYPD_n_read <- readr::read_csv(url_in)
+```
+
+### Tidy up the data and pick the columns that I used:
+```{r }
+NYPD_T_Calls <- NYPD_n_read %>% select(CMPLNT_FR_DT,CMPLNT_FR_TM,CMPLNT_TO_DT,OFNS_DESC,BORO_NM, LOC_OF_OCCUR_DESC, SUSP_RACE, SUSP_SEX )
+```
+### Reported_Crime_Time by Count:
+
+```{r}
+Crime_Time <- NYPD_T_Calls %>% 
+count(CMPLNT_FR_TM, sort = TRUE)
+```
+
+```{r}
+Crime_Time %>%
+  ggplot(aes(x = CMPLNT_FR_TM, y = n )) + 
+  geom_point(aes(color = "CMPLNT_FR_TM")) +
+  geom_col()
+```
+
+
+### Reported_Cirme_Type by Count:
+
+I was interested to see the most attempted crime_types 
+```{r}
+Crime_Type <- NYPD_T_Calls %>% 
+mutate(OFNS_DESC = fct_lump(OFNS_DESC, n = 15 )) %>%
+count(OFNS_DESC, sort = TRUE) 
+```
+
+```{r}
+Crime_Type %>%
+  mutate(OFNS_DESC = fct_reorder(OFNS_DESC, n)) %>%
+  ggplot(aes(x = OFNS_DESC, y = n )) + 
+  geom_col() + 
+  coord_flip()
+```
+### Location by Reported__Crime_Count:
+
+Then I wanted to see if any neighborhood in particular has more crimes than others 
+
+```{r}
+Crime_Loc <- NYPD_T_Calls %>% 
+count(BORO_NM, sort = TRUE) 
+```
+
+So here I only pick the crime report in the last year in each neighborhood
+
+```{r}
+Crime_Loc_year <- NYPD_T_Calls %>% 
+  slice(0:1000000) %>%
+  count(BORO_NM, sort = TRUE) 
+```
+
+```{r}
+Crime_Loc_year %>%
+  mutate(BORO_NM = fct_reorder(BORO_NM, n)) %>%
+  ggplot(aes(x = BORO_NM, y = n )) + 
+  geom_col() + 
+  coord_flip()
+```
+### Possible sources of bias:
+
+By simply looking at the graph we might think that Brooklyn has the highest crime rate. However, there are some points missing:
+1) the population ratio : Brooklyn has a population of 2.6M and Manhattan has a population of 1.6M, we can conclude that ->  Total_Reported-crimes/Brooklyn_population = 2.8/2.6 = 1.07 and  Total_Reported-crimes/Manhattan_population = 2.4/1.6 = 1.5. This means the crime possibility could be higher in Manhattan vs Brooklyn.
+2) The neighborhoods could have been more sensitive to reporting crimes based on the the population_race or other factors as well.
+
+
+
+  
+### Reported_Crime_Type by Reported_Crime_Location:
+
+```{r}
+Crime_region_and_counts <- NYPD_T_Calls  %>%
+  mutate(OFNS_DESC = fct_lump(OFNS_DESC, n = 10 )) %>%
+  count(BORO_NM, OFNS_DESC)
+```
+
+```{r fig.align="center", echo = FALSE,fig.width = 14}
+Crime_region_and_counts %>%
+  mutate(OFNS_DESC = fct_lump(OFNS_DESC, n = 10 )) %>%
+  mutate(OFNS_DESC = reorder_within(
+    x = OFNS_DESC, 
+    by = n,
+    within = BORO_NM
+    )) %>%
+  ggplot(aes(x = OFNS_DESC , y = n , fill = BORO_NM)) + 
+  geom_col( show.legend = FALSE) + 
+  scale_x_reordered()+
+  coord_flip()+
+  facet_wrap(~ BORO_NM, scales = "free") 
+  labs(x = "Crime Type", y = "Count of crimes")
+
+```
+  
+
+### Race by Reported_Cirme_Count:
+```{r}
+Crime_Race <- NYPD_T_Calls %>% 
+count(SUSP_RACE, sort = TRUE) 
+```
+
+```{r}
+Crime_Race %>%
+  mutate(SUSP_RACE = fct_reorder(SUSP_RACE, n)) %>%
+  ggplot(aes(x = SUSP_RACE, y = n )) + 
+  geom_col() + 
+  coord_flip()
+```
+### Possible sources of bias:
+
+Given the fact that most crimes happen during the day and there is a better chance to identify the suspect based on the previous graphs, yet the second known race for reported crimes is unknown. This could show some potential bias for the people who reported the crimes. Either they did not want to report the race or could not identify the race.
+
+### Race by Reported_Crime_Location:
+
+```{r} 
+Crime_race_location <- NYPD_T_Calls  %>%
+  count(BORO_NM, SUSP_RACE)
+```
+
+```{r fig.align="center", echo = FALSE,fig.width = 14}
+Crime_race_location %>%
+  mutate(SUSP_RACE = reorder_within(
+    x = SUSP_RACE, 
+    by = n,
+    within = BORO_NM
+    )) %>%
+  ggplot(aes(x =  SUSP_RACE , y = n , fill = BORO_NM )) + 
+  geom_col( show.legend = FALSE) + 
+  scale_x_reordered()+
+  coord_flip()+
+  facet_wrap(~ BORO_NM , scales = "free") 
+  labs(x = "Crime_race", y = "Crime_time")
+```
+### Plossible sources of bias:
+
+Not knowing the race of the suspect in different neighborhoods could have some potential reasons:
+1) The reported was not able to see the suspect because of covering their face 
+2) The reporter was not willing to share the race of the suspect
+
+
+### Reported_Crime_Type by Race:
+
+I was curious to see if the the crime_type changes by the race
+
+```{r}
+Crime_Type_and_Race <- NYPD_T_Calls  %>%
+  mutate(OFNS_DESC = fct_lump(OFNS_DESC, n = 5 )) %>%
+  count(SUSP_RACE, OFNS_DESC)
+```
+
+```{r fig.align="center", echo = FALSE,fig.width = 14}
+Crime_Type_and_Race %>%
+  mutate(OFNS_DESC = fct_lump(OFNS_DESC, n = 5 )) %>%
+  mutate(OFNS_DESC = reorder_within(
+    x = OFNS_DESC, 
+    by = n,
+    within = SUSP_RACE
+    )) %>%
+  ggplot(aes(x = OFNS_DESC , y = n , fill = SUSP_RACE)) + 
+  geom_col( show.legend = FALSE) + 
+  scale_x_reordered()+
+  coord_flip()+
+  facet_wrap(~ SUSP_RACE, scales = "free") 
+  labs(x = "Count", y = "Crime Type")
+
+```
+### Possible sources of bias 
+
+The unknown-suspect race based on the graph happens to be the only chart to have petite-larceny as its highest number of reported crime which makes me wonder if people chose not to report the race of the suspect when the crime seemed small in their mind.
